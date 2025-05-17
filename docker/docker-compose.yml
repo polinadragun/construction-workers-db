@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: construction-workers-system-postgres
+    restart: always
+    env_file:
+      - ./.env
+    ports:
+      - "6324:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
+      start_period: 5s
+    build:
+      context: ./
+
+  flyway:
+    image: flyway/flyway:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      -url=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      -user=${POSTGRES_USER}
+      -password=${POSTGRES_PASSWORD}
+      -locations=filesystem:/docker_migrations migrate
+    volumes:
+      - ../migrations:/docker_migrations
+    env_file:
+      - ./.env
+    environment:
+      - FLYWAY_TARGET=${MIGRATION_VERSION}
+
+  seeder:
+    build:
+      context: ../seeding-module
+    container_name: construction-workers-system-seeder
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    env_file:
+      - ./.env
+    environment:
+      URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      APP_ENV: dev
+      SEED_COUNT: ${SEED_COUNT}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ANALYST_NAMES: ${ANALYST_NAMES}
+
+volumes:
+  pg_data:

@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.polinadragun.db'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.postgresql:postgresql:42.7.1'
+    implementation 'com.github.javafaker:javafaker:1.0.2'
+
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.0'
+
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes(
+                'Main-Class': 'com.polinadragun.db.Main'
+        )
+    }
+}
