@@ -1,0 +1,40 @@
+scope: pgcluster01
+name: pg-node-2
+
+restapi:
+  listen: 0.0.0.0:8011
+  connect_address: patroni2:8011
+
+etcd3:
+  hosts: ["etcd:2379"]
+  protocol: http
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: patroni2:5432
+  data_dir: /var/lib/postgresql/data/pgdata
+  authentication:
+    replication:
+      username: repl_user
+      password: repl_pass
+    superuser:
+      username: postgres
+      password: postgres
+  parameters:
+    shared_preload_libraries: 'pg_stat_statements'
+    hot_standby: on
+    wal_level: replica
+    max_wal_senders: 10
+    max_replication_slots: 10
+    wal_keep_segments: 8
+  use_pg_rewind: true
+  remove_data_directory_on_rewind_failure: false
+  remove_data_directory_on_diverged_timelines: false
+  pg_hba:
+    - host replication repl_user 0.0.0.0/0 md5
+    - host all all 0.0.0.0/0 md5
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false

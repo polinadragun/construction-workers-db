@@ -1,0 +1,71 @@
+scope: pgcluster01
+name: pg-node-1
+
+restapi:
+  listen: 0.0.0.0:8010
+  connect_address: patroni1:8010
+
+etcd3:
+  hosts: ["etcd:2379"]
+  protocol: http
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: patroni1:5432
+  data_dir: /var/lib/postgresql/data/pgdata
+  authentication:
+    replication:
+      username: repl_user
+      password: repl_pass
+    superuser:
+      username: postgres
+      password: postgres
+  parameters:
+    shared_preload_libraries: 'pg_stat_statements'
+    wal_level: replica
+    hot_standby: "on"
+    max_wal_senders: 5
+    max_replication_slots: 5
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048579
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        max_wal_senders: 5
+        max_replication_slots: 5
+  pg_hba:
+    - host replication repl_user 0.0.0.0/0 md5
+    - host all all 0.0.0.0/0 md5
+
+  initdb:
+    - encoding: UTF8
+    - locale: en_US.UTF-8
+    - data-checksums
+
+  users:
+    postgres:
+      password: postgres
+      options:
+        - createrole
+        - createdb
+        - login
+        - superuser
+
+    repl_user:
+      password: repl_pass
+      options:
+        - replication
+
+  post_init: /var/lib/postgresql/init.sh

@@ -1,0 +1,15 @@
+pg_stat_statements:
+  query: "SELECT query, calls, total_exec_time AS total_time, mean_exec_time AS mean_time FROM pg_stat_statements ORDER BY total_exec_time;"
+  metrics:
+    - query:
+        usage: "LABEL"
+        description: "SQL query"
+    - calls:
+        usage: "GAUGE"
+        description: "Number of times executed"
+    - total_time:
+        usage: "GAUGE"
+        description: "Total execution time"
+    - mean_time:
+        usage: "GAUGE"
+        description: "Mean execution time"

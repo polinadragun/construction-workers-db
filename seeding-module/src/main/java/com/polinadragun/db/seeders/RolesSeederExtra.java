@@ -15,6 +15,14 @@ public class RolesSeederExtra extends RolesSeeder {
     @Override
     public void seed(Connection connection) throws SQLException, IOException {
         super.seed(connection);
-        //some changes or ovverrides for suiting new migrations
+        String sql = SqlLoader.loadSql("roles.sql");
+
+        PreparedStatement statement = connection.prepareStatement(sql);
+
+        statement.setString(1, "NikitaMatsnev");
+        statement.setBoolean(2, false);
+        statement.addBatch();
+
+        statement.executeBatch();
     }
 }

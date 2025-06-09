@@ -1,27 +1,8 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: construction-workers-system-postgres
-    restart: always
-    env_file:
-      - ./.env
-    ports:
-      - "6324:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
-      start_period: 5s
-    build:
-      context: ./
-
   flyway:
     image: flyway/flyway:latest
-    depends_on:
-      postgres:
-        condition: service_healthy
     command:
-      -url=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      -url=jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?targetSessionAttrs=read-write
       -user=${POSTGRES_USER}
       -password=${POSTGRES_PASSWORD}
       -locations=filesystem:/docker_migrations migrate
@@ -31,6 +12,8 @@ services:
       - ./.env
     environment:
       - FLYWAY_TARGET=${MIGRATION_VERSION}
+    networks:
+      - patroni-network
 
   seeder:
     build:
@@ -42,15 +25,109 @@ services:
     env_file:
       - ./.env
     environment:
-      URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      URL: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       APP_ENV: dev
       SEED_COUNT: ${SEED_COUNT}
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: ${POSTGRES_HOST}
       POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ANALYST_NAMES: ${ANALYST_NAMES}
+    networks:
+      - patroni-network
+
+
+  load-emulator:
+    build:
+      context: ../load-emulator
+    container_name: construction-workers-system-emulator
+    depends_on:
+      - seeder
+    env_file:
+      - ./.env
+    ports:
+      - "8080:8080"
+    environment:
+      URL: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      LOAD_SIMULATION_MIN: 5
+      LOAD_SIMULATION_MAX: 20
+    networks:
+      - patroni-network
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    restart: always
+    ports:
+      - "9187:9187"
+    env_file:
+      - ./.env
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: /queries.yaml
+    volumes:
+      - ../monitoring/queries.yaml:/queries.yaml:ro
+    networks:
+      - patroni-network
+
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - postgres-exporter
+      - load-emulator
+    networks:
+      - patroni-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - patroni-network
+
+  backup:
+    build:
+      context: ../backup
+    env_file:
+      - .env
+    environment:
+        POSTGRES_HOST: haproxy
+        POSTGRES_PORT: 5433
+        POSTGRES_DB: ${POSTGRES_DB}
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        BACKUP_RETENTION_COUNT: 2
+        BACKUP_INTERVAL_CRON: "*/1 * * * *"
+    volumes:
+      - ./backups:/backups
+    networks:
+      - patroni-network
+
 
 volumes:
   pg_data:
+  grafana_data:
+
+networks:
+  patroni-network:
+    external: true
+    name: shared-pg-network

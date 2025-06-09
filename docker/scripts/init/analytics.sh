@@ -11,6 +11,10 @@ $1
 EOF
 }
 
+sleep 5
+psql -U postgres -d postgres -c "CREATE DATABASE construction-workers-db;"
+psql -U postgres -d postgres -c "ALTER DATABASE construction-workers-db OWNER TO postgres;"
+
 for username in "${USERSTOGRANT[@]}"; do
   if [[ ! "$username" =~ ^[a-zA-Z][a-zA-Z0-9_]*$ ]]; then
     echo "Invalid username: $username" >&2
@@ -35,3 +39,5 @@ for username in "${USERSTOGRANT[@]}"; do
   \$\$;
 "
 done
+
+run "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
